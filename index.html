@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spelling Game — Infinite Age-based</title>
+  <style>
+    :root{--bg:#071225;--card:#0b1624;--muted:#98b7d0;--accent:#60a5fa;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:linear-gradient(180deg,#021026,#071423);color:#eaf4ff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px}
+    .app{width:100%;max-width:820px}
+    .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    h1{margin:0;font-size:20px}
+    .center{display:flex;align-items:center;justify-content:center}
+    .big{font-size:30px;letter-spacing:0.6px}
+    .muted{color:var(--muted)}
+    input[type=text], input[type=number]{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:var(--glass);color:inherit}
+    button{background:var(--accent);border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+    .secondary{background:transparent;border:1px solid rgba(255,255,255,0.05);color:var(--muted)}
+    .row{display:flex;gap:8px;align-items:center}
+    .small{font-size:13px;color:var(--muted)}
+    .timer{font-weight:700;font-size:18px}
+    @media (max-width:760px){.center{flex-direction:column}.card{padding:12px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card" id="ageCard">
+      <div class="center" style="flex-direction:column;gap:12px">
+        <div class="big muted">Enter your age (12–30) to start:</div>
+        <input type="number" id="ageInput" placeholder="Your age" min="12" max="30" />
+        <button id="ageSubmit">Start Game</button>
+        <div id="ageFeedback" class="small"></div>
+      </div>
+    </div>
+
+    <div class="card" id="gameCard" style="display:none">
+      <header>
+        <div>
+          <h1>Spelling Game — Infinite Age-based</h1>
+        </div>
+        <div style="margin-left:auto" class="small">Score: <span id="score">0</span></div>
+      </header>
+
+      <main style="display:grid;grid-template-columns:1fr;gap:14px">
+        <section>
+          <div style="padding:14px;border-radius:10px;background:var(--glass);display:flex;flex-direction:column;gap:12px">
+            <div class="center" style="flex-direction:column;gap:10px">
+              <div id="prompt" class="big muted">Ready — press Start</div>
+
+              <div class="row" style="width:100%;justify-content:center;gap:12px">
+                <div class="timer">Time left: <span id="timeLeft">15</span>s</div>
+                <button id="startBtn">Start</button>
+                <button id="repeatBtn" class="secondary">🔁 Repeat</button>
+                <button id="skipBtn" class="secondary">Skip</button>
+                <button id="changeAgeBtn" class="secondary">Change Age</button>
+              </div>
+
+              <div style="width:100%">
+                <input id="answerInput" type="text" placeholder="Type spelling here and press Enter" autocomplete="off" />
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button id="submitBtn">Submit</button>
+                </div>
+              </div>
+
+              <div id="feedback" class="small"></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div style="padding:10px;margin-top:8px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);display:flex;flex-direction:column;gap:8px">
+            <div class="small">Rounds played: <span id="rounds">0</span></div>
+            <div class="small">Correct: <span id="correct">0</span></div>
+            <div class="small">Wrong: <span id="wrong">0</span></div>
+          </div>
+        </section>
+      </main>
+
+      <footer style="margin-top:12px" class="small muted">Progress is stored locally in your browser only.</footer>
+    </div>
+  </div>
+
+  <script>
+    const masterWords = ['apple','banana','friend','library','question','calendar','accommodate','necessary','different','beautiful','restaurant','computer','subterranean','quintessential','conscientious','miscellaneous','juxtaposition','magnanimous','perseverance','ephemeral','conglomerate','ubiquitous','idiosyncratic','anachronistic','infrastructure','capitulate','dichotomy','obfuscate','equanimity','perspicacious','cognizant','exacerbate','incontrovertible','magnanimity','omnipotent','pulchritude','recalcitrant','soliloquy','taciturn','vociferous','zeitgeist','ameliorate','belligerent','cacophony','deleterious','enervate','fastidious','grandiloquent','harbinger','ignominious','jubilant','kaleidoscope','lachrymose','mendacious','nefarious','obstreperous','panacea','quandary','recalcitrant','sagacious','temerity','umbrageous','vociferous','winsome','xenophobic','yokelish','zealous'];
+
+    let ageWordPools = {};
+    for(let a=12;a<=30;a++){
+      ageWordPools[a]=[];
+      for(let i=0;i<30;i++){
+        const factor = (a-12)/18; // difficulty scale
+        const index=Math.floor(factor*(masterWords.length-1));
+        const variation=Math.floor(Math.random()*5); // pick near index
+        ageWordPools[a].push(masterWords[Math.min(index+variation,masterWords.length-1)]);
+      }
+    }
+
+    let state={score:0,rounds:0,correct:0,wrong:0,current:null,age:null};
+    let timer=null; let timeLeft=15; let roundActive=false;
+
+    const ageCard=document.getElementById('ageCard');
+    const gameCard=document.getElementById('gameCard');
+    const ageInput=document.getElementById('ageInput');
+    const ageSubmit=document.getElementById('ageSubmit');
+    const ageFeedback=document.getElementById('ageFeedback');
+    const changeAgeBtn=document.getElementById('changeAgeBtn');
+
+    const startBtn=document.getElementById('startBtn');
+    const repeatBtn=document.getElementById('repeatBtn');
+    const skipBtn=document.getElementById('skipBtn');
+    const promptEl=document.getElementById('prompt');
+    const timeLeftEl=document.getElementById('timeLeft');
+    const answerInput=document.getElementById('answerInput');
+    const submitBtn=document.getElementById('submitBtn');
+    const feedback=document.getElementById('feedback');
+    const scoreEl=document.getElementById('score');
+    const roundsEl=document.getElementById('rounds');
+    const correctEl=document.getElementById('correct');
+    const wrongEl=document.getElementById('wrong');
+
+    function speak(text){ if(!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
+
+    function pickWord(age){
+      const pool=ageWordPools[age];
+      return pool[Math.floor(Math.random()*pool.length)];
+    }
+
+    function startRound(){
+      if(roundActive) return;
+      answerInput.value=''; feedback.textContent='';
+      timeLeft=15; timeLeftEl.textContent=timeLeft;
+      const word=pickWord(state.age); state.current=word; roundActive=true;
+      promptEl.textContent='Spell the word — Listen';
+      speak('Spell the word.');
+      setTimeout(()=>speak(word),650);
+      timer=setInterval(()=>{
+        timeLeft-=1; timeLeftEl.textContent=timeLeft;
+        if(timeLeft<=0){ clearInterval(timer); timer=null; roundActive=false; onTimeout(); }
+      },1000);
+    }
+
+    function onTimeout(){
+      feedback.textContent=`⏱️ Time's up — correct spelling: ${state.current}`;
+      state.wrong+=1; state.rounds+=1; state.current=null; updateStats();
+    }
+
+    function submitAnswer(){
+      if(!roundActive && !state.current) return;
+      const ans=answerInput.value.trim();
+      if(!ans){ feedback.textContent='Type something then submit.'; return; }
+      clearInterval(timer); timer=null; roundActive=false;
+      const correct=state.current;
+      if(ans.toLowerCase()===correct.toLowerCase()){
+        feedback.textContent='✅ Correct!'; state.correct+=1; state.score+=1; state.rounds+=1; state.current=null; updateStats(); setTimeout(startRound,1500);
+      } else {
+        feedback.textContent=`❌ Wrong — correct spelling: ${correct}`;
+        state.wrong+=1; state.score=Math.max(0,state.score-1); state.rounds+=1; state.current=null; updateStats();
+      }
+    }
+
+    function updateStats(){
+      scoreEl.textContent=state.score;
+      roundsEl.textContent=state.rounds;
+      correctEl.textContent=state.correct;
+      wrongEl.textContent=state.wrong;
+    }
+
+    ageSubmit.addEventListener('click',()=>{
+      const age=parseInt(ageInput.value);
+      if(isNaN(age)||age<12||age>30){ ageFeedback.textContent='Please enter an age between 12 and 30.'; return; }
+      state.age=age; ageCard.style.display='none'; gameCard.style.display='block'; startRound();
+    });
+
+    changeAgeBtn.addEventListener('click',()=>{
+      ageCard.style.display='block'; gameCard.style.display='none'; ageInput.value=state.age; ageFeedback.textContent='';
+    });
+
+    startBtn.addEventListener('click',startRound);
+    repeatBtn.addEventListener('click',()=>{ if(state.current){ speak('Spell the word.'); setTimeout(()=>speak(state.current),500); } else { feedback.textContent='No active word — press Start.'; } });
+    skipBtn.addEventListener('click',()=>{ if(roundActive){ clearInterval(timer); timer=null; roundActive=false; feedback.textContent=`Skipped — correct spelling: ${state.current}`; state.wrong+=1; state.rounds+=1; state.current=null; updateStats(); } startRound(); });
+    submitBtn.addEventListener('click',submitAnswer);
+    answerInput.addEventListener('keydown',e=>{ if(e.key==='Enter') submitAnswer(); });
+  </script>
+</body>
+</html>
